@@ -24,6 +24,7 @@
     <ProjectGuid>{b1ab187e-39e6-4ce0-a0e2-a9c1fb229d50}</ProjectGuid>
     <RootNamespace>desperatestruggle</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>DesperateStruggle</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
