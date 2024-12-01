@@ -1,9 +1,10 @@
 ﻿#include <SFML/Graphics.hpp>
 #include <winsock2.h>
-#include <ws2tcpip.h> // inet_pton 포함
+#include <ws2tcpip.h>
 #include <iostream>
 #include <string>
 #include <thread>
+#include "game.cpp"
 
 #pragma comment(lib, "ws2_32.lib") // WinSock 라이브러리 링크
 
@@ -15,8 +16,17 @@ using namespace std;
 
 SOCKET clientSocket;
 
+// 클라이언트 종료 처리 함수
+void cleanupClient() {
+    if (clientSocket != INVALID_SOCKET) {
+        closesocket(clientSocket);
+        WSACleanup();
+        cout << "Client shut down and cleaned up." << endl;
+    }
+}
+
 // 서버 응답 처리 함수
-void listenServer(bool& isWaitingScreen, bool& isGameStart) {
+void listenServer(bool& isWaitingScreen, bool& isGameStart, bool& isCountdown, int& countdownTime, Game& game) {
     char buffer[1024];
     while (true) {
         memset(buffer, 0, sizeof(buffer));
@@ -24,23 +34,30 @@ void listenServer(bool& isWaitingScreen, bool& isGameStart) {
 
         if (bytesReceived <= 0) {
             cout << "Disconnected from server." << endl;
-            closesocket(clientSocket);
+            cleanupClient();
             return;
         }
 
         string message(buffer);
         if (message == "WAIT\n") {
             cout << "Waiting for another player..." << endl;
+            isWaitingScreen = true;
         }
         else if (message == "COUNTDOWN\n") {
             cout << "Game will start in 10 seconds!" << endl;
-            isWaitingScreen = true; // 대기 화면 유지
-            this_thread::sleep_for(chrono::seconds(10)); // 카운트다운
+            isCountdown = true;
+            countdownTime = 10;
         }
         else if (message == "START\n") {
             cout << "Game Started!" << endl;
-            isGameStart = true; // 게임 시작 플래그
+            isGameStart = true;
             break;
+        }
+        else if (message.rfind("SHOT\n", 0) == 0) {
+            game.processShot(message);
+        }
+        else if (message.rfind("HEALED\n", 0) == 0) {
+            game.processHeal(message);
         }
     }
 }
@@ -157,7 +174,6 @@ public:
 private:
     Text titleText, passwordPrompt, passwordInput;
     Button createButton;
-    string password;
 };
 
 // JoinRoomScreen 클래스
@@ -213,7 +229,6 @@ public:
 private:
     Text titleText, passwordPrompt, passwordInput;
     Button joinButton;
-    string password;
 };
 
 // WaitingScreen 클래스
@@ -235,7 +250,27 @@ private:
     Text waitingText;
 };
 
-// main 함수
+// CountdownScreen 클래스
+class CountdownScreen {
+public:
+    CountdownScreen(float width, float height, const Font& font)
+        : countdownText("10", font, 64) {
+        countdownText.setFillColor(Color::Black);
+        countdownText.setPosition(width / 2 - countdownText.getGlobalBounds().width / 2, height / 2);
+    }
+
+    void update(int secondsLeft) {
+        countdownText.setString(to_string(secondsLeft));
+    }
+
+    void draw(RenderWindow& window) {
+        window.draw(countdownText);
+    }
+
+private:
+    Text countdownText;
+};
+
 int main() {
     RenderWindow window(VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Russian Roulette");
     Font font;
@@ -250,74 +285,85 @@ int main() {
         return -1;
     }
 
+    // 스크린 초기화
     TitleScreen titleScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     CreateRoomScreen createRoomScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     JoinRoomScreen joinRoomScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     WaitingScreen waitingScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
+    CountdownScreen countdownScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
+    Game game;
 
-    bool isTitleScreen = true, isCreateRoom = false, isJoinRoom = false, isWaitingScreen = false, isGameStart = false;
+    // 게임 관련 플래그
+    bool isTitleScreen = true;
+    bool isCreateRoom = false;
+    bool isJoinRoom = false;
+    bool isWaitingScreen = false;
+    bool isCountdown = false;
+    bool isGameStart = false;
+    int countdownTime = 0;
 
     // WinSock 초기화
     WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
-
-    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
-
-    sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr); // 최신 방식으로 IP 주소 변환
-    serverAddr.sin_port = htons(12345);
-
-    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
-        cerr << "Connection failed!" << endl;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cout << "WSAStartup failed!" << endl;
         return -1;
     }
 
-    cout << "Connected to server!" << endl;
+    // 서버에 연결
+    clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (clientSocket == INVALID_SOCKET) {
+        cout << "Error creating socket!" << endl;
+        WSACleanup();
+        return -1;
+    }
 
-    thread(listenServer, ref(isWaitingScreen), ref(isGameStart)).detach();
+    sockaddr_in serverAddress;
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(12345);
+    serverAddress.sin_addr.s_addr = inet_addr("127.0.0.1"); // 서버 주소
+
+    if (connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
+        cout << "Failed to connect to server!" << endl;
+        cleanupClient();
+        return -1;
+    }
+
+    thread serverListener(listenServer, ref(isWaitingScreen), ref(isGameStart), ref(isCountdown), ref(countdownTime), ref(game));
 
     while (window.isOpen()) {
         Event event;
         while (window.pollEvent(event)) {
-            if (isTitleScreen) {
-                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
-                    Vector2i mousePos = Mouse::getPosition(window);
+            if (event.type == Event::Closed) {
+                window.close();
+            }
+
+            if (event.type == Event::MouseButtonPressed) {
+                Vector2i mousePos = Mouse::getPosition(window);
+
+                if (isTitleScreen) {
                     if (titleScreen.isStartButtonClicked(mousePos)) {
                         isTitleScreen = false;
                         isCreateRoom = true;
                     }
                 }
-            }
-            else if (isCreateRoom) {
-                if (event.type == Event::TextEntered) {
+                else if (isCreateRoom) {
                     createRoomScreen.handleInput(event);
-                }
-                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
-                    if (createRoomScreen.isCreateButtonClicked(Mouse::getPosition(window))) {
+                    if (createRoomScreen.isCreateButtonClicked(mousePos)) {
                         string message = "CREATE " + createRoomScreen.getPassword() + "\n";
                         send(clientSocket, message.c_str(), message.size(), 0);
                         isCreateRoom = false;
                         isWaitingScreen = true;
                     }
                 }
-            }
-            else if (isJoinRoom) {
-                if (event.type == Event::TextEntered) {
+                else if (isJoinRoom) {
                     joinRoomScreen.handleInput(event);
-                }
-                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
-                    if (joinRoomScreen.isJoinButtonClicked(Mouse::getPosition(window))) {
+                    if (joinRoomScreen.isJoinButtonClicked(mousePos)) {
                         string message = "JOIN " + joinRoomScreen.getPassword() + "\n";
                         send(clientSocket, message.c_str(), message.size(), 0);
                         isJoinRoom = false;
                         isWaitingScreen = true;
                     }
                 }
-            }
-
-            if (event.type == Event::Closed) {
-                window.close();
             }
         }
 
@@ -335,12 +381,18 @@ int main() {
         else if (isWaitingScreen) {
             waitingScreen.draw(window);
         }
+        else if (isCountdown) {
+            countdownScreen.update(countdownTime);
+            countdownScreen.draw(window);
+        }
+        else if (isGameStart) {
+            game.run();
+        }
 
         window.display();
     }
 
-    closesocket(clientSocket);
-    WSACleanup();
-
+    serverListener.join();
+    cleanupClient();
     return 0;
 }
