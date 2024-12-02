@@ -15,14 +15,14 @@ using namespace std;
 #define WINDOW_WIDTH 1200
 #define WINDOW_HEIGHT 800
 
-SOCKET clientSocket;
+SOCKET clientSocket; // 클라이언트 소켓
 
 // 클라이언트 종료 처리 함수
 void cleanupClient() {
     if (clientSocket != INVALID_SOCKET) {
         closesocket(clientSocket);
         WSACleanup();
-        cout << "Client shut down and cleaned up." << endl;
+        cout << "클라이언트 종료 및 정리 완료." << endl;
     }
 }
 
@@ -34,23 +34,20 @@ void listenServer(bool& isWaitingScreen, bool& isGameStart, bool& isCountdown, i
         int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
 
         if (bytesReceived <= 0) {
-            cout << "Disconnected from server." << endl;
+            cout << "서버와의 연결이 끊어졌습니다." << endl;
             cleanupClient();
             return;
         }
 
         string message(buffer);
         if (message == "WAIT\n") {
-            cout << "Waiting for another player..." << endl;
             isWaitingScreen = true;
         }
         else if (message == "COUNTDOWN\n") {
-            cout << "Game will start in 10 seconds!" << endl;
             isCountdown = true;
             countdownTime = 10;
         }
         else if (message == "START\n") {
-            cout << "Game Started!" << endl;
             isGameStart = true;
             break;
         }
@@ -63,7 +60,7 @@ void listenServer(bool& isWaitingScreen, bool& isGameStart, bool& isCountdown, i
     }
 }
 
-// 버튼 클래스
+// Button 클래스 정의
 class Button {
 public:
     Button(const wstring& text, const Font& font, float x, float y, float width, float height,
@@ -96,12 +93,36 @@ private:
     Text buttonText;
 };
 
-// ChoiceRoomScreen 클래스
+class TitleScreen {
+public:
+    TitleScreen(float width, float height, const Font& font)
+        : startButton(L"- 게임 시작하기 -", font, width / 2 - 100, height / 2, 200, 50) {
+        titleText.setFont(font);
+        titleText.setString("Desperate Struggle");
+        titleText.setCharacterSize(48);
+        titleText.setFillColor(Color::Black);
+        titleText.setPosition(width / 2 - titleText.getGlobalBounds().width / 2, height / 3);
+    }
+
+    void draw(RenderWindow& window) {
+        window.draw(titleText);
+        startButton.draw(window);
+    }
+
+    bool isStartButtonClicked(Vector2i mousePos) {
+        return startButton.isClicked(mousePos);
+    }
+
+private:
+    Text titleText;
+    Button startButton;
+};
+
 class ChoiceRoomScreen {
 public:
     ChoiceRoomScreen(float width, float height, const Font& font)
-        : createButton(L"게임 생성", font, width / 2 - 150, height / 2 - 50, 300, 50),
-        joinButton(L"게임 참여", font, width / 2 - 150, height / 2 + 50, 300, 50) {
+        : createButton(L"게임 생성", font, width / 2 - 200, height / 2, 150, 50),
+        joinButton(L"게임 참여", font, width / 2 + 50, height / 2, 150, 50) {
         titleText.setFont(font);
         titleText.setString(L"방 선택");
         titleText.setCharacterSize(36);
@@ -129,39 +150,12 @@ private:
     Button joinButton;
 };
 
-// TitleScreen 클래스
-class TitleScreen {
-public:
-    TitleScreen(float width, float height, const Font& font)
-        : startButton(L"- 게임 시작하기 -", font, width / 2 - 100, height / 2, 200, 50) {
-        titleText.setFont(font);
-        titleText.setString("Desperate Struggle");
-        titleText.setCharacterSize(48);
-        titleText.setFillColor(Color::Black);
-        titleText.setPosition(width / 2 - titleText.getGlobalBounds().width / 2, height / 3);
-    }
-
-    void draw(RenderWindow& window) {
-        window.draw(titleText);
-        startButton.draw(window);
-    }
-
-    bool isStartButtonClicked(Vector2i mousePos) {
-        return startButton.isClicked(mousePos);
-    }
-
-private:
-    Text titleText;
-    Button startButton;
-};
-
-// CreateRoomScreen 클래스 수정
 class CreateRoomScreen {
 public:
     CreateRoomScreen(float width, float height, const Font& font)
-        : createButton(L"게임 생성", font, width / 2 - 100, height / 2 + 100, 200, 50) {
+        : createButton(L"방 생성", font, width / 2 - 100, height / 2 + 100, 200, 50) {
         titleText.setFont(font);
-        titleText.setString(L"게임 생성");
+        titleText.setString(L"방 생성");
         titleText.setCharacterSize(36);
         titleText.setFillColor(Color::Black);
         titleText.setPosition(width / 2 - titleText.getGlobalBounds().width / 2, height / 4);
@@ -189,9 +183,9 @@ public:
     void handleInput(Event event) {
         if (event.type == Event::TextEntered) {
             if (event.text.unicode == '\b' && !password.empty()) {
-                password.pop_back(); // 백스페이스 처리
+                password.pop_back();
             }
-            else if (isalnum(event.text.unicode)) { // 영숫자 입력만 허용
+            else if (isalnum(event.text.unicode)) {
                 password += static_cast<char>(event.text.unicode);
             }
             passwordInput.setString(password);
@@ -203,7 +197,7 @@ public:
     }
 
     bool isPasswordEntered() const {
-        return !password.empty(); // 비밀번호가 입력되었는지 확인
+        return !password.empty();
     }
 
     string getPassword() const {
@@ -216,13 +210,12 @@ private:
     string password;
 };
 
-// JoinRoomScreen 클래스
 class JoinRoomScreen {
 public:
     JoinRoomScreen(float width, float height, const Font& font)
-        : joinButton(L"게임 참여하기", font, width / 2 - 100, height / 2 + 100, 200, 50) {
+        : joinButton(L"방 참여", font, width / 2 - 100, height / 2 + 100, 200, 50) {
         titleText.setFont(font);
-        titleText.setString(L"게임 참여");
+        titleText.setString(L"방 참여");
         titleText.setCharacterSize(36);
         titleText.setFillColor(Color::Black);
         titleText.setPosition(width / 2 - titleText.getGlobalBounds().width / 2, height / 4);
@@ -237,6 +230,7 @@ public:
         passwordInput.setCharacterSize(24);
         passwordInput.setFillColor(Color::Black);
         passwordInput.setPosition(width / 2 - 100, height / 2 - 150);
+        passwordInput.setString(""); // 초기화
     }
 
     void draw(RenderWindow& window) {
@@ -249,9 +243,9 @@ public:
     void handleInput(Event event) {
         if (event.type == Event::TextEntered) {
             if (event.text.unicode == '\b' && !password.empty()) {
-                password.pop_back(); // 백스페이스
+                password.pop_back();
             }
-            else if (isdigit(event.text.unicode)) {
+            else if (isalnum(event.text.unicode)) {
                 password += static_cast<char>(event.text.unicode);
             }
             passwordInput.setString(password);
@@ -260,6 +254,10 @@ public:
 
     bool isJoinButtonClicked(Vector2i mousePos) {
         return joinButton.isClicked(mousePos);
+    }
+
+    bool isPasswordEntered() const {
+        return !password.empty();
     }
 
     string getPassword() const {
@@ -272,7 +270,7 @@ private:
     string password;
 };
 
-// WaitingScreen 클래스
+// WaitingScreen 클래스 정의
 class WaitingScreen {
 public:
     WaitingScreen(float width, float height, const Font& font) {
@@ -345,13 +343,13 @@ int main() {
 
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        cout << "WSAStartup failed!" << endl;
+        cout << "WSAStartup 실패!" << endl;
         return -1;
     }
 
     clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (clientSocket == INVALID_SOCKET) {
-        cout << "Error creating socket!" << endl;
+        cout << "소켓 생성 실패!" << endl;
         WSACleanup();
         return -1;
     }
@@ -362,12 +360,12 @@ int main() {
     inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
 
     if (connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
-        cout << "Failed to connect to server!" << endl;
+        cout << "서버 연결 실패!" << endl;
         cleanupClient();
         return -1;
     }
 
-    thread serverListener(listenServer, ref(isWaitingScreen), ref(isGameStart), ref(isCountdown), ref(countdownTime), ref(game));
+    thread serverListener(listenServer, ref(isWaitingScreen), ref(isCreateRoom), ref(isChoiceRoom), ref(isWaitingScreen), ref(game));
 
     while (window.isOpen()) {
         Event event;
@@ -376,14 +374,12 @@ int main() {
                 window.close();
             }
 
-            if (event.type == Event::MouseButtonPressed) {
-                Vector2i mousePos = Mouse::getPosition(window);
+            Vector2i mousePos = Mouse::getPosition(window);
 
-                if (isTitleScreen) {
-                    if (titleScreen.isStartButtonClicked(mousePos)) {
-                        isTitleScreen = false;
-                        isChoiceRoom = true;
-                    }
+            if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
+                if (isTitleScreen && titleScreen.isStartButtonClicked(mousePos)) {
+                    isTitleScreen = false;
+                    isChoiceRoom = true;
                 }
                 else if (isChoiceRoom) {
                     if (choiceRoomScreen.isCreateButtonClicked(mousePos)) {
@@ -396,32 +392,29 @@ int main() {
                     }
                 }
                 else if (isCreateRoom) {
-                    createRoomScreen.handleInput(event);
-                    if (createRoomScreen.isCreateButtonClicked(mousePos)) {
-                        if (createRoomScreen.isPasswordEntered()) { // 비밀번호가 입력되었는지 확인
-                            string message = "CREATE " + createRoomScreen.getPassword() + "\n";
-                            send(clientSocket, message.c_str(), message.size(), 0);
-                            isCreateRoom = false;
-                            isWaitingScreen = true;
-                        }
-                        else {
-                            cout << "비밀번호를 입력하세요!" << endl; // 디버그 메시지
-                        }
+                    if (createRoomScreen.isCreateButtonClicked(mousePos) && createRoomScreen.isPasswordEntered()) {
+                        string message = "CREATE " + createRoomScreen.getPassword() + "\n";
+                        send(clientSocket, message.c_str(), message.size(), 0);
+                        isCreateRoom = false;
+                        isWaitingScreen = true;
                     }
                 }
                 else if (isJoinRoom) {
-                    joinRoomScreen.handleInput(event);
-                    if (joinRoomScreen.isJoinButtonClicked(mousePos)) {
-                        if (!joinRoomScreen.getPassword().empty()) { // 비밀번호가 입력되었는지 확인
-                            string message = "JOIN " + joinRoomScreen.getPassword() + "\n";
-                            send(clientSocket, message.c_str(), message.size(), 0);
-                            isJoinRoom = false;
-                            isWaitingScreen = true;
-                        }
-                        else {
-                            cout << "비밀번호를 입력하세요!" << endl; // 디버그 메시지
-                        }
+                    if (joinRoomScreen.isJoinButtonClicked(mousePos) && joinRoomScreen.isPasswordEntered()) {
+                        string message = "JOIN " + joinRoomScreen.getPassword() + "\n";
+                        send(clientSocket, message.c_str(), message.size(), 0);
+                        isJoinRoom = false;
+                        isWaitingScreen = true;
                     }
+                }
+            }
+
+            if (event.type == Event::TextEntered) {
+                if (isCreateRoom) {
+                    createRoomScreen.handleInput(event);
+                }
+                else if (isJoinRoom) {
+                    joinRoomScreen.handleInput(event);
                 }
             }
         }
