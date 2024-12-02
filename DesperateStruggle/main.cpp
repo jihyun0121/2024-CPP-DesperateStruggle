@@ -27,7 +27,8 @@ void cleanupClient() {
 }
 
 // 서버 응답 처리 함수
-void listenServer(bool& isWaitingScreen, bool& isGameStart, bool& isCountdown, int& countdownTime, Game& game) {
+void listenServer(bool& isWaitingScreen, bool& isGameStart, bool& isPlayerTurn,
+    string& bulletData, string& lifeData, string& itemData) {
     char buffer[1024];
     while (true) {
         memset(buffer, 0, sizeof(buffer));
@@ -43,22 +44,29 @@ void listenServer(bool& isWaitingScreen, bool& isGameStart, bool& isCountdown, i
         if (message == "WAIT\n") {
             isWaitingScreen = true;
         }
-        else if (message == "COUNTDOWN\n") {
-            isCountdown = true;
-            countdownTime = 10;
-        }
         else if (message == "START\n") {
             isGameStart = true;
             break;
         }
-        else if (message.rfind("SHOT\n", 0) == 0) {
-            game.processShot(message);
+        else if (message.rfind("BULLETS\n", 0) == 0) {
+            bulletData = message.substr(8);
         }
-        else if (message.rfind("HEALED\n", 0) == 0) {
-            game.processHeal(message);
+        else if (message.rfind("LIVES\n", 0) == 0) {
+            lifeData = message.substr(6);
+        }
+        else if (message.rfind("ITEMS\n", 0) == 0) {
+            itemData = message.substr(6);
+        }
+        else if (message == "TURN:YOU\n") {
+            isPlayerTurn = true;
+        }
+        else if (message == "TURN:RIVER\n") {
+            isPlayerTurn = false;
         }
     }
 }
+
+
 
 // Button 클래스 정의
 class Button {
@@ -182,14 +190,20 @@ public:
 
     void handleInput(Event event) {
         if (event.type == Event::TextEntered) {
-            if (event.text.unicode == '\b' && !password.empty()) {
+            if (event.text.unicode == '\b' && !password.empty()) { // 백스페이스 처리
                 password.pop_back();
             }
-            else if (isalnum(event.text.unicode)) {
+            else if ((event.text.unicode < 128 || (event.text.unicode >= 44032 && event.text.unicode <= 55203))) {
+                // 영문자, 숫자, 한글 범위 허용
                 password += static_cast<char>(event.text.unicode);
             }
             passwordInput.setString(password);
         }
+    }
+
+    void resetInput() {
+        password.clear();
+        passwordInput.setString("");
     }
 
     bool isCreateButtonClicked(Vector2i mousePos) {
@@ -242,14 +256,19 @@ public:
 
     void handleInput(Event event) {
         if (event.type == Event::TextEntered) {
-            if (event.text.unicode == '\b' && !password.empty()) {
+            if (event.text.unicode == '\b' && !password.empty()) { // 백스페이스 처리
                 password.pop_back();
             }
-            else if (isalnum(event.text.unicode)) {
+            else if (event.text.unicode < 128 && isalnum(event.text.unicode)) { // 영숫자 입력만 허용
                 password += static_cast<char>(event.text.unicode);
             }
             passwordInput.setString(password);
         }
+    }
+
+    void resetInput() {
+        password.clear();
+        passwordInput.setString("");
     }
 
     bool isJoinButtonClicked(Vector2i mousePos) {
@@ -310,6 +329,47 @@ private:
     Text countdownText;
 };
 
+class GameScreen {
+public:
+    GameScreen(float width, float height, const Font& font)
+        : turnText("", font, 30), bulletInfo("", font, 24),
+        lifeInfo("", font, 24), itemInfo("", font, 24) {
+
+        turnText.setFillColor(Color::Black);
+        turnText.setPosition(width / 2 - 50, height / 10);
+
+        bulletInfo.setFillColor(Color::Red);
+        bulletInfo.setPosition(10, 10);
+
+        lifeInfo.setFillColor(Color::Green);
+        lifeInfo.setPosition(10, 40);
+
+        itemInfo.setFillColor(Color::Blue);
+        itemInfo.setPosition(10, 70);
+    }
+
+    void update(bool isPlayerTurn, const string& bulletData, const string& lifeData, const string& itemData) {
+        turnText.setString(isPlayerTurn ? "Turn: You" : "Turn: River");
+        bulletInfo.setString("Bullets: " + bulletData);
+        lifeInfo.setString("Lives: " + lifeData);
+        itemInfo.setString("Items: " + itemData); // 아이템 정보 추가
+    }
+
+    void render(RenderWindow& window) {
+        window.draw(turnText);
+        window.draw(bulletInfo);
+        window.draw(lifeInfo);
+        window.draw(itemInfo);  // 아이템 정보 표시
+    }
+
+private:
+    Text turnText;    // 현재 턴 텍스트
+    Text bulletInfo;  // 탄환 정보 텍스트
+    Text lifeInfo;    // 목숨 정보 텍스트
+    Text itemInfo;    // 아이템 정보 텍스트
+};
+
+
 int main() {
     RenderWindow window(VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "Russian Roulette");
     Font font;
@@ -324,14 +384,16 @@ int main() {
         return -1;
     }
 
+    // 화면 인스턴스 생성
     TitleScreen titleScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     ChoiceRoomScreen choiceRoomScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     CreateRoomScreen createRoomScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     JoinRoomScreen joinRoomScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     WaitingScreen waitingScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
     CountdownScreen countdownScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
-    Game game;
+    GameScreen gameScreen(WINDOW_WIDTH, WINDOW_HEIGHT, font);
 
+    // 상태 플래그 초기화
     bool isTitleScreen = true;
     bool isChoiceRoom = false;
     bool isCreateRoom = false;
@@ -339,49 +401,62 @@ int main() {
     bool isWaitingScreen = false;
     bool isCountdown = false;
     bool isGameStart = false;
-    int countdownTime = 0;
 
+    // 게임 관련 데이터
+    int countdownTime = 10;
+    string bulletData = "";
+    string lifeData = "";
+    string itemData = "";
+    bool isPlayerTurn = false;
+
+    // WinSock 초기화
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-        cout << "WSAStartup 실패!" << endl;
+        cerr << "WSAStartup 실패" << endl;
         return -1;
     }
 
-    clientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    clientSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (clientSocket == INVALID_SOCKET) {
-        cout << "소켓 생성 실패!" << endl;
+        cerr << "소켓 생성 실패" << endl;
         WSACleanup();
         return -1;
     }
 
-    sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(12345);
-    inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+    sockaddr_in serverAddr{};
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(54000);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-    if (connect(clientSocket, (struct sockaddr*)&serverAddress, sizeof(serverAddress)) == SOCKET_ERROR) {
-        cout << "서버 연결 실패!" << endl;
+    if (connect(clientSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        cerr << "서버 연결 실패" << endl;
         cleanupClient();
         return -1;
     }
 
-    thread serverListener(listenServer, ref(isWaitingScreen), ref(isCreateRoom), ref(isChoiceRoom), ref(isWaitingScreen), ref(game));
+    thread serverListener(listenServer, ref(isWaitingScreen), ref(isGameStart), ref(isCountdown),
+        ref(countdownTime), ref(bulletData), ref(isPlayerTurn), ref(lifeData), ref(itemData));
+    serverListener.detach();
 
     while (window.isOpen()) {
         Event event;
         while (window.pollEvent(event)) {
             if (event.type == Event::Closed) {
+                cleanupClient();
                 window.close();
             }
 
-            Vector2i mousePos = Mouse::getPosition(window);
-
-            if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
-                if (isTitleScreen && titleScreen.isStartButtonClicked(mousePos)) {
-                    isTitleScreen = false;
-                    isChoiceRoom = true;
+            if (isTitleScreen) {
+                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
+                    if (titleScreen.isStartButtonClicked(Mouse::getPosition(window))) {
+                        isTitleScreen = false;
+                        isChoiceRoom = true;
+                    }
                 }
-                else if (isChoiceRoom) {
+            }
+            else if (isChoiceRoom) {
+                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
+                    Vector2i mousePos = Mouse::getPosition(window);
                     if (choiceRoomScreen.isCreateButtonClicked(mousePos)) {
                         isChoiceRoom = false;
                         isCreateRoom = true;
@@ -391,30 +466,29 @@ int main() {
                         isJoinRoom = true;
                     }
                 }
-                else if (isCreateRoom) {
-                    if (createRoomScreen.isCreateButtonClicked(mousePos) && createRoomScreen.isPasswordEntered()) {
-                        string message = "CREATE " + createRoomScreen.getPassword() + "\n";
-                        send(clientSocket, message.c_str(), message.size(), 0);
+            }
+            else if (isCreateRoom) {
+                createRoomScreen.handleInput(event);
+                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
+                    if (createRoomScreen.isCreateButtonClicked(Mouse::getPosition(window)) && createRoomScreen.isPasswordEntered()) {
+                        string password = createRoomScreen.getPassword();
+                        send(clientSocket, ("CREATE\n" + password + "\n").c_str(), password.size() + 8, 0);
+                        createRoomScreen.resetInput();
                         isCreateRoom = false;
                         isWaitingScreen = true;
                     }
                 }
-                else if (isJoinRoom) {
-                    if (joinRoomScreen.isJoinButtonClicked(mousePos) && joinRoomScreen.isPasswordEntered()) {
-                        string message = "JOIN " + joinRoomScreen.getPassword() + "\n";
-                        send(clientSocket, message.c_str(), message.size(), 0);
+            }
+            else if (isJoinRoom) {
+                joinRoomScreen.handleInput(event);
+                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
+                    if (joinRoomScreen.isJoinButtonClicked(Mouse::getPosition(window)) && joinRoomScreen.isPasswordEntered()) {
+                        string password = joinRoomScreen.getPassword();
+                        send(clientSocket, ("JOIN\n" + password + "\n").c_str(), password.size() + 6, 0);
+                        joinRoomScreen.resetInput();
                         isJoinRoom = false;
                         isWaitingScreen = true;
                     }
-                }
-            }
-
-            if (event.type == Event::TextEntered) {
-                if (isCreateRoom) {
-                    createRoomScreen.handleInput(event);
-                }
-                else if (isJoinRoom) {
-                    joinRoomScreen.handleInput(event);
                 }
             }
         }
@@ -441,13 +515,13 @@ int main() {
             countdownScreen.draw(window);
         }
         else if (isGameStart) {
-            game.run();
+            gameScreen.update(isPlayerTurn, bulletData, lifeData, itemData);
+            gameScreen.render(window);
         }
 
         window.display();
     }
 
-    serverListener.join();
     cleanupClient();
     return 0;
 }

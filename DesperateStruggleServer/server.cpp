@@ -5,143 +5,154 @@
 #include <string>
 #include <thread>
 #include <chrono>
-#include <algorithm>
 
-#pragma comment(lib, "ws2_32.lib") // WinSock 라이브러리 링크
+#pragma comment(lib, "ws2_32.lib")
 
 using namespace std;
 
 struct Room {
     string password;
     vector<SOCKET> players;
-    vector<int> healths;   // 플레이어의 체력을 저장
-    vector<int> turns;     // 턴 순서를 관리
-    vector<int> bullets;   // 총알 상태: 0 (빈탄), 1 (실탄)
-    bool gameStarted;
-
-    // 기본 생성자 추가
-    Room() : password(""), gameStarted(false) {}
-
-    // 생성자 추가
-    Room(const string& pwd)
-        : password(pwd), gameStarted(false) {
-        players.clear();
-        healths = { 5, 5 };    // 두 플레이어의 기본 체력
-        turns = { 0, 0 };      // 각 플레이어의 턴 초기화
-        bullets.resize(8, 0);  // 기본적으로 8개의 빈탄으로 초기화
-    }
+    int turn = 0;  // 턴을 관리 (0: 플레이어 1, 1: 플레이어 2)
+    vector<int> playerLives = { 5, 5 };  // 각 플레이어의 목숨 (5로 초기화)
+    vector<string> playerItems[2];  // 각 플레이어가 획득한 아이템
+    vector<string> bullets = { "empty", "bullet", "empty", "bullet", "empty", "bullet", "bullet", "empty" };  // 총알 상태 (empty: 빈탄, bullet: 실탄)
 };
 
 map<string, Room> rooms;
 
-void sendToAllInRoom(const string& password, const string& message) {
-    for (SOCKET player : rooms[password].players) {
-        send(player, message.c_str(), message.length(), 0);
-    }
-}
-
 void handleClient(SOCKET clientSocket) {
-    char buffer[1024];
-    string clientPassword;
+    try {
+        char buffer[1024];
+        while (true) {
+            memset(buffer, 0, sizeof(buffer));
+            int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
 
-    while (true) {
-        memset(buffer, 0, sizeof(buffer));
-        int bytesReceived = recv(clientSocket, buffer, sizeof(buffer), 0);
+            if (bytesReceived <= 0) {
+                cout << "Client disconnected." << endl;
+                closesocket(clientSocket);
+                return;
+            }
 
-        if (bytesReceived <= 0) {
-            cout << "Client disconnected." << endl;
-            closesocket(clientSocket);
-            return;
-        }
+            string message(buffer);
 
-        string message(buffer);
+            if (message.rfind("CREATE", 0) == 0) {
+                string password = message.substr(7, 4);
+                if (rooms.find(password) == rooms.end()) {
+                    rooms[password] = { password, {clientSocket} };
+                    send(clientSocket, "WAIT\n", 5, 0);
+                    cout << "Room created: " << password << endl;
+                }
+                else {
+                    send(clientSocket, "EXIST\n", 6, 0);
+                }
+            }
+            else if (message.rfind("JOIN", 0) == 0) {
+                string password = message.substr(5, 4);
+                if (rooms.find(password) != rooms.end() && rooms[password].players.size() < 2) {
+                    rooms[password].players.push_back(clientSocket);
+                    send(clientSocket, "WAIT\n", 5, 0);
 
-        // 방 생성
-        if (message.rfind("CREATE", 0) == 0) {
-            clientPassword = message.substr(7, 4);
-            rooms[clientPassword] = Room(clientPassword);  // Room 생성자를 사용
-            rooms[clientPassword].players.push_back(clientSocket); // 플레이어 추가
-            send(clientSocket, "WAIT\n", 5, 0);
-            cout << "Room created with password: " << clientPassword << endl;
-        }
-        // 방에 참여
-        else if (message.rfind("JOIN", 0) == 0) {
-            clientPassword = message.substr(5, 4);
+                    // 두 명의 플레이어가 모두 입장하면 카운트다운 시작
+                    if (rooms[password].players.size() == 2) {
+                        // 카운트다운을 시작하는 메시지 전송
+                        for (SOCKET player : rooms[password].players) {
+                            send(player, "COUNTDOWN\n", 11, 0);
+                        }
 
-            if (rooms.find(clientPassword) != rooms.end() && rooms[clientPassword].players.size() < 2) {
-                rooms[clientPassword].players.push_back(clientSocket);
-                send(clientSocket, "WAIT\n", 5, 0);
+                        // 10초 카운트다운
+                        this_thread::sleep_for(chrono::seconds(10));
 
-                if (rooms[clientPassword].players.size() == 2) {
-                    // 두 명이 대기방에 들어오면 카운트다운 시작
-                    for (SOCKET player : rooms[clientPassword].players) {
-                        send(player, "COUNTDOWN\n", 11, 0);
+                        // 카운트다운 종료 후 게임 시작 메시지 전송
+                        for (SOCKET player : rooms[password].players) {
+                            send(player, "START\n", 6, 0);
+                        }
+
+                        // 게임 진행
+                        while (true) {
+                            Room& room = rooms[password];
+
+                            // 현재 턴에 맞는 플레이어에게 턴 정보 전송
+                            SOCKET currentPlayerSocket = room.players[room.turn];
+                            SOCKET otherPlayerSocket = room.players[1 - room.turn];
+
+                            send(currentPlayerSocket, "YOUR_TURN\n", 10, 0);  // 자신의 턴
+                            send(otherPlayerSocket, "OPPONENT_TURN\n", 14, 0);  // 상대방의 턴
+
+                            // 총알을 소모하고 턴을 넘길 때
+                            this_thread::sleep_for(chrono::seconds(5));  // 5초 대기 (각 턴의 진행 시간을 설정)
+
+                            // 턴 변경
+                            room.turn = 1 - room.turn;
+
+                            // 플레이어의 목숨을 확인하여, 목숨이 0이면 게임 종료
+                            if (room.playerLives[0] == 0 || room.playerLives[1] == 0) {
+                                string result = (room.playerLives[0] == 0) ? "Player 2 wins!" : "Player 1 wins!";
+                                for (SOCKET player : room.players) {
+                                    send(player, result.c_str(), result.length(), 0);
+                                }
+                                break;
+                            }
+                        }
                     }
-
-                    // 카운트다운 10초
-                    this_thread::sleep_for(chrono::seconds(10));
-
-                    // 10초 후 "START" 메시지 전송
-                    sendToAllInRoom(clientPassword, "START\n");
-                    cout << "Game started in room: " << clientPassword << endl;
-                    rooms[clientPassword].gameStarted = true;
+                }
+                else {
+                    send(clientSocket, "FULL\n", 5, 0);
                 }
             }
-            else {
-                send(clientSocket, "FULL\n", 5, 0); // 방이 꽉 찼으면 거부
-            }
         }
-
-        // 게임 진행 처리
-        if (rooms[clientPassword].gameStarted) {
-            if (message.rfind("SHOOT", 0) == 0) {
-                int playerIndex = find(rooms[clientPassword].players.begin(), rooms[clientPassword].players.end(), clientSocket) - rooms[clientPassword].players.begin();
-                int bulletIndex = rooms[clientPassword].turns[playerIndex];
-
-                if (rooms[clientPassword].bullets[bulletIndex] == 1) {  // 실탄인 경우
-                    rooms[clientPassword].healths[1 - playerIndex] -= 1; // 상대방 체력 감소
-                    sendToAllInRoom(clientPassword, "SHOT\n");
-                    cout << "Player " << playerIndex + 1 << " shot the bullet. Health: " << rooms[clientPassword].healths[1 - playerIndex] << endl;
-                }
-                rooms[clientPassword].turns[playerIndex] = (bulletIndex + 1) % 8;  // 턴 순서 변경
-            }
-            else if (message.rfind("USE_ITEM", 0) == 0) {
-                int playerIndex = find(rooms[clientPassword].players.begin(), rooms[clientPassword].players.end(), clientSocket) - rooms[clientPassword].players.begin();
-                rooms[clientPassword].healths[playerIndex] = min(rooms[clientPassword].healths[playerIndex] + 1, 8);  // 회복 아이템 사용
-                sendToAllInRoom(clientPassword, "HEALED\n");
-                cout << "Player " << playerIndex + 1 << " used a heal item. Health: " << rooms[clientPassword].healths[playerIndex] << endl;
-            }
-
-            // 게임 종료 처리
-            if (rooms[clientPassword].healths[0] <= 0 || rooms[clientPassword].healths[1] <= 0) {
-                string winner = rooms[clientPassword].healths[0] > 0 ? "Player 1" : "Player 2";
-                sendToAllInRoom(clientPassword, (winner + " WINS!\n").c_str());
-                rooms[clientPassword].gameStarted = false; // 게임 종료
-                break;  // 종료 후 클라이언트와의 연결 종료
-            }
-        }
+    }
+    catch (const exception& e) {
+        cerr << "Error in client handler: " << e.what() << endl;
+        closesocket(clientSocket);
     }
 }
 
 int main() {
     WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        cerr << "WSAStartup failed!" << endl;
+        return -1;
+    }
 
-    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+    SOCKET serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (serverSocket == INVALID_SOCKET) {
+        cerr << "Error creating socket!" << endl;
+        WSACleanup();
+        return -1;
+    }
+
     sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
     serverAddr.sin_port = htons(12345);
 
-    bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
-    listen(serverSocket, SOMAXCONN);
+    if (bind(serverSocket, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        cerr << "Bind failed!" << endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return -1;
+    }
 
-    cout << "Server is listening on port 12345..." << endl;
+    if (listen(serverSocket, SOMAXCONN) == SOCKET_ERROR) {
+        cerr << "Listen failed!" << endl;
+        closesocket(serverSocket);
+        WSACleanup();
+        return -1;
+    }
+
+    cout << "Server is running on port 12345..." << endl;
 
     while (true) {
         SOCKET clientSocket = accept(serverSocket, nullptr, nullptr);
+        if (clientSocket == INVALID_SOCKET) {
+            cerr << "Failed to accept connection!" << endl;
+            continue;
+        }
+
         cout << "Client connected." << endl;
-        thread(handleClient, clientSocket).detach();
+        thread clientThread(handleClient, clientSocket);
+        clientThread.detach(); // 클라이언트별 독립 스레드 실행
     }
 
     closesocket(serverSocket);

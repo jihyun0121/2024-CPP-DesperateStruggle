@@ -29,13 +29,15 @@ private:
 // Item 클래스 정의
 class Item {
 public:
-    enum Type { HEAL, DAMAGE };
+    enum Type { HEAL, MAGNIFY, COIN, BAN };
 
     Item(Type t) : type(t) {}
 
     bool operator==(const Item& other) const {
         return this->type == other.type;
     }
+
+    Type getType() const { return type; }
 
 private:
     Type type;
@@ -48,12 +50,54 @@ public:
     int health = 5;
     bool isTurn = false;
     int turn = 0;
+    vector<Item> items;
 
     Player(const string& playerName) : name(playerName) {}
 
     string getName() { return name; }
     int getHealth() { return health; }
     void addHealth(int h) { health = min(health + h, 8); }
+    void useItem(vector<Bullet>& bullets) {
+        if (!items.empty()) {
+            Item item = items.back();
+            items.pop_back();
+            switch (item.getType()) {
+            case Item::HEAL:
+                addHealth(1);
+                cout << name << " healed! Health: " << health << endl;
+                break;
+            case Item::MAGNIFY:
+                revealBullets(bullets);
+                break;
+            case Item::COIN:
+                // 코인 사용: 총알 한 개를 소모하고 턴 넘기지 않음
+                if (!bullets.empty()) {
+                    bullets.pop_back();
+                    cout << name << " used a coin and shot a bullet!" << endl;
+                }
+                break;
+            case Item::BAN:
+                // 금지: 상대방 한 턴 쉬게하기
+                cout << name << " used a BAN item! Opponent skips next turn!" << endl;
+                // 게임 로직에서 상대방의 턴을 건너뛰도록 설정 필요
+                break;
+            }
+        }
+    }
+
+    void revealBullets(vector<Bullet>& bullets) {
+        int emptyCount = 0, liveCount = 0;
+        for (auto& b : bullets) {
+            if (b.getType() == Bullet::EMPTY) {
+                emptyCount++;
+            }
+            else {
+                liveCount++;
+            }
+        }
+        cout << "Bullets - Empty: " << emptyCount << " Live: " << liveCount << endl;
+    }
+
     bool isTurnActive() { return isTurn; }
     void toggleTurn() { isTurn = !isTurn; }
     void shootBullet(vector<Bullet>& bullets) {
@@ -62,15 +106,6 @@ public:
             cout << name << " got hit! Health: " << health << endl;
         }
         turn = (turn + 1) % bullets.size();
-    }
-
-    void useItem(vector<Item>& items) {
-        for (auto& item : items) {
-            if (item == Item(Item::HEAL)) {
-                addHealth(1);
-                cout << name << " healed! Health: " << health << endl;
-            }
-        }
     }
 };
 
@@ -98,17 +133,6 @@ public:
         player.isTurn = turnStatus;
     }
 
-    // 서버 메시지 처리 함수
-    void processHeal(const string& message) {
-        player1.addHealth(1);  // 예제: Player 1 체력 증가
-        cout << "Player healed: Health = " << player1.getHealth() << endl;
-    }
-
-    void processShot(const string& message) {
-        player2.addHealth(-1);  // 예제: Player 2 체력 감소
-        cout << "Player shot: Opponent's health = " << player2.getHealth() << endl;
-    }
-
 private:
     RenderWindow window;
     Font font;
@@ -117,21 +141,36 @@ private:
     vector<Bullet> bullets;
     vector<Item> items;
     Text turnText, healthText1, healthText2, bulletInfoText;
+    bool skipTurn = false;  // 상대방의 턴을 건너뛰는 상태를 관리
 
     void createBullets() {
-        for (int i = 0; i < 8; ++i) {
-            if (rand() % 4 == 0) {
-                bullets.push_back(Bullet(Bullet::LIVE));
-            }
-            else {
-                bullets.push_back(Bullet(Bullet::EMPTY));
-            }
+        bullets.clear();
+        int bulletCount = rand() % 5 + 4; // 총알의 개수는 최소 4개에서 최대 8개 사이
+        bool hasLive = false, hasEmpty = false;
+
+        for (int i = 0; i < bulletCount; ++i) {
+            Bullet::Type type = (rand() % 2 == 0 && !hasEmpty) ? Bullet::EMPTY : Bullet::LIVE;
+            if (type == Bullet::LIVE) hasLive = true;
+            else hasEmpty = true;
+
+            bullets.push_back(Bullet(type));
+        }
+
+        // 최소 1개의 실탄과 빈탄을 보장
+        if (!hasLive) {
+            bullets[rand() % bulletCount] = Bullet(Bullet::LIVE);
+        }
+        if (!hasEmpty) {
+            bullets[rand() % bulletCount] = Bullet(Bullet::EMPTY);
         }
     }
 
     void createItems() {
+        items.clear();
+        // 아이템 4개 종류로 구성: 체력회복, 돋보기, 코인, 금지
         for (int i = 0; i < 3; ++i) {
-            items.push_back(Item(Item::HEAL));
+            int itemType = rand() % 4;
+            items.push_back(Item(static_cast<Item::Type>(itemType)));
         }
     }
 
@@ -142,17 +181,19 @@ private:
                 window.close();
             }
             if (event.type == Event::KeyPressed) {
-                if (event.key.code == Keyboard::Up && player1.isTurnActive()) {
+                if (event.key.code == Keyboard::Up && player1.isTurnActive() && !skipTurn) {
                     player1.shootBullet(bullets);
-                    player1.useItem(items);
+                    player1.useItem(bullets);
                     player1.toggleTurn();
                     player2.toggleTurn();
+                    skipTurn = false;  // 턴을 넘겼으므로 skipTurn 초기화
                 }
-                if (event.key.code == Keyboard::Down && player2.isTurnActive()) {
+                if (event.key.code == Keyboard::Down && player2.isTurnActive() && !skipTurn) {
                     player2.shootBullet(bullets);
-                    player2.useItem(items);
+                    player2.useItem(bullets);
                     player2.toggleTurn();
                     player1.toggleTurn();
+                    skipTurn = false;  // 턴을 넘겼으므로 skipTurn 초기화
                 }
             }
         }
@@ -208,4 +249,11 @@ private:
         window.draw(bulletInfoText);
         window.display();
     }
+
+    // 상대방의 턴을 건너뛰는 기능 추가
+    void skipOpponentTurn() {
+        skipTurn = true;
+        cout << "Opponent's turn is skipped!" << endl;
+    }
 };
+
