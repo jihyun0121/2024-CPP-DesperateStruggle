@@ -1,0 +1,17 @@
+[
+  {
+    "Name": "새 프로필",
+    "Projects": [
+      {
+        "Path": "DesperateStruggle\\DesperateStruggle.vcxproj",
+        "Action": "Start",
+        "DebugTarget": "로컬 Windows 디버거"
+      },
+      {
+        "Path": "DesperateStruggleServer\\DesperateStruggleServer.vcxproj",
+        "Action": "Start",
+        "DebugTarget": "로컬 Windows 디버거"
+      }
+    ]
+  }
+]
