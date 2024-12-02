@@ -1,47 +1,6 @@
-﻿  game.cpp
-  main.cpp
-C:\MIRIM\2024-CPP-DesperateStruggle\DesperateStruggle\main.cpp(475,100): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\MIRIM\2024-CPP-DesperateStruggle\DesperateStruggle\main.cpp(487,98): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
-C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14): error C2672: 'invoke': 일치하는 오버로드된 함수가 없습니다.
-  (소스 파일 'main.cpp'을(를) 컴파일하는 중)
-      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\type_traits(1699,16):
-      'unknown-type std::invoke(_Callable &&,_Ty1 &&,_Types2 ...) noexcept(<expr>)'일 수 있습니다.
-          C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14):
-          함수 템플릿 'unknown-type std::invoke(_Callable &&,_Ty1 &&,_Types2 ...) noexcept(<expr>)'을(를) 특수화하지 못했습니다.
-              C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14):
-              다음 템플릿 인수 사용:
-                  C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14):
-                  '_Callable=void (__cdecl *)(bool &,bool &,bool &,std::string &,std::string &,std::string &)'
-                  C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14):
-                  '_Ty1=std::reference_wrapper<bool>'
-                  C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14):
-                  '_Types2={std::reference_wrapper<bool>, std::reference_wrapper<bool>, std::reference_wrapper<int>, std::reference_wrapper<std::string>, std::reference_wrapper<bool>, std::reference_wrapper<std::string>, std::reference_wrapper<std::string>}'
-              C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\type_traits(1702,45):
-              'std::_Invoker_functor::_Call': 일치하는 오버로드된 함수가 없습니다.
-                  C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\type_traits(1599,27):
-                  'unknown-type std::_Invoker_functor::_Call(_Callable &&,_Types ...) noexcept(<expr>)'일 수 있습니다.
-      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\type_traits(1693,16):
-      또는       'unknown-type std::invoke(_Callable &&) noexcept(<expr>)'
-          C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14):
-          'unknown-type std::invoke(_Callable &&) noexcept(<expr>)': 1개의 인수가 필요합니다. 9개가 제공되었습니다.
-      C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(60,14):
-      템플릿 인스턴스화 컨텍스트(가장 오래된 인스턴스화 컨텍스트)가
-          C:\MIRIM\2024-CPP-DesperateStruggle\DesperateStruggle\main.cpp(437,26):
-          컴파일되는 함수 템플릿 인스턴스화 'std::thread::thread<void(__cdecl &)(bool &,bool &,bool &,std::string &,std::string &,std::string &),std::reference_wrapper<bool>,std::reference_wrapper<bool>,std::reference_wrapper<bool>,std::reference_wrapper<int>,std::reference_wrapper<std::string>,std::reference_wrapper<bool>,std::reference_wrapper<std::string>,std::reference_wrapper<std::string>,0>(_Fn,std::reference_wrapper<bool> &&,std::reference_wrapper<bool> &&,std::reference_wrapper<bool> &&,std::reference_wrapper<int> &&,std::reference_wrapper<std::string> &&,std::reference_wrapper<bool> &&,std::reference_wrapper<std::string> &&,std::reference_wrapper<std::string> &&)'에 대한 참조를 확인하세요.
-          with
-          [
-              _Fn=void (__cdecl &)(bool &,bool &,bool &,std::string &,std::string &,std::string &)
-          ]
-          C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(93,9):
-          컴파일되는 함수 템플릿 인스턴스화 'void std::thread::_Start<void(__cdecl &)(bool &,bool &,bool &,std::string &,std::string &,std::string &),_Ty,_Ty,_Ty,std::reference_wrapper<int>,std::reference_wrapper<std::string>,_Ty,std::reference_wrapper<std::string>,std::reference_wrapper<std::string>>(_Fn,_Ty &&,_Ty &&,_Ty &&,std::reference_wrapper<int> &&,std::reference_wrapper<std::string> &&,_Ty &&,std::reference_wrapper<std::string> &&,std::reference_wrapper<std::string> &&)'에 대한 참조를 확인하세요.
-          with
-          [
-              _Ty=std::reference_wrapper<bool>,
-              _Fn=void (__cdecl &)(bool &,bool &,bool &,std::string &,std::string &,std::string &)
-          ]
-          C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(76,40):
-          컴파일되는 함수 템플릿 인스턴스화 'unsigned int (__cdecl *std::thread::_Get_invoke<std::thread::_Start::_Tuple,0,1,2,3,4,5,6,7,8>(std::integer_sequence<size_t,0,1,2,3,4,5,6,7,8>) noexcept)(void *)'에 대한 참조를 확인하세요.
-          C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.42.34433\include\thread(67,17):
-          컴파일되는 함수 템플릿 인스턴스화 'unsigned int std::thread::_Invoke<std::thread::_Start::_Tuple,0,1,2,3,4,5,6,7,8>(void *) noexcept'에 대한 참조를 확인하세요.
-  
-  코드를 생성하고 있습니다...
+﻿  main.cpp
+C:\MIRIM\2024-CPP-DesperateStruggle\DesperateStruggle\main.cpp(459,73): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+C:\MIRIM\2024-CPP-DesperateStruggle\DesperateStruggle\main.cpp(467,73): warning C4267: '인수': 'size_t'에서 'int'(으)로 변환하면서 데이터가 손실될 수 있습니다.
+  DesperateStruggle.vcxproj -> C:\MIRIM\2024-CPP-DesperateStruggle\x64\Debug\DesperateStruggle.exe
+  'pwsh.exe'은(는) 내부 또는 외부 명령, 실행할 수 있는 프로그램, 또는
+  배치 파일이 아닙니다.
