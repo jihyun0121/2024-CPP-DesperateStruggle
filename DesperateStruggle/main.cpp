@@ -59,6 +59,39 @@ void listenServer(bool& isWaitingScreen, bool& isGameStart, bool& isCountdown, i
     }
 }
 
+// Button 클래스 정의
+class Button {
+public:
+    Button(const wstring& text, const Font& font, float x, float y, float width, float height,
+        Color bgColor = Color::White, Color textColor = Color::Black) {
+        buttonShape.setSize(Vector2f(width, height));
+        buttonShape.setFillColor(bgColor);
+        buttonShape.setPosition(x, y);
+
+        buttonText.setFont(font);
+        buttonText.setString(text);
+        buttonText.setCharacterSize(24);
+        buttonText.setFillColor(textColor);
+        buttonText.setPosition(
+            x + (width - buttonText.getGlobalBounds().width) / 2,
+            y + (height - buttonText.getGlobalBounds().height) / 2 - 5
+        );
+    }
+
+    void draw(RenderWindow& window) {
+        window.draw(buttonShape);
+        window.draw(buttonText);
+    }
+
+    bool isClicked(Vector2i mousePos) {
+        return buttonShape.getGlobalBounds().contains(static_cast<Vector2f>(mousePos));
+    }
+
+private:
+    RectangleShape buttonShape;
+    Text buttonText;
+};
+
 class TitleScreen {
 public:
     TitleScreen(float width, float height, const Font& font)
@@ -247,7 +280,6 @@ private:
     string password;
 };
 
-// WaitingScreen 클래스 정의
 class WaitingScreen {
 public:
     WaitingScreen(float width, float height, const Font& font) {
@@ -266,7 +298,6 @@ private:
     Text waitingText;
 };
 
-// CountdownScreen 클래스
 class CountdownScreen {
 public:
     CountdownScreen(float width, float height, const Font& font)
@@ -312,39 +343,6 @@ public:
 private:
     Text turnText;   // 현재 턴 텍스트
     Text bulletInfo; // 탄환 정보 텍스트
-};
-
-// Button 클래스 정의
-class Button {
-public:
-    Button(const wstring& text, const Font& font, float x, float y, float width, float height,
-        Color bgColor = Color::White, Color textColor = Color::Black) {
-        buttonShape.setSize(Vector2f(width, height));
-        buttonShape.setFillColor(bgColor);
-        buttonShape.setPosition(x, y);
-
-        buttonText.setFont(font);
-        buttonText.setString(text);
-        buttonText.setCharacterSize(24);
-        buttonText.setFillColor(textColor);
-        buttonText.setPosition(
-            x + (width - buttonText.getGlobalBounds().width) / 2,
-            y + (height - buttonText.getGlobalBounds().height) / 2 - 5
-        );
-    }
-
-    void draw(RenderWindow& window) {
-        window.draw(buttonShape);
-        window.draw(buttonText);
-    }
-
-    bool isClicked(Vector2i mousePos) {
-        return buttonShape.getGlobalBounds().contains(static_cast<Vector2f>(mousePos));
-    }
-
-private:
-    RectangleShape buttonShape;
-    Text buttonText;
 };
 
 // int main() 함수 정의
